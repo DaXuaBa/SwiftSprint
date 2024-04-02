@@ -5,38 +5,22 @@ import json
 import pytz
 import requests
 import pymysql
-import configparser
-
-config = configparser.ConfigParser()
-config.read('./SwiftSprint/biden/infor.conf')
-
-kafka_host_name = config.get('kafka', 'host')
-kafka_port_no = config.get('kafka', 'port_no')
-input_kafka_topic_name = config.get('kafka', 'input_topic_name')
-kafka_bootstrap_servers = kafka_host_name + ':' + kafka_port_no
-
-apify_actors = config.get('apify', 'actors')
-apify_token = config.get('apify', 'token')
-
-mysql_host_name = config.get('mysql', 'host')
-mysql_port_no = int(config.get('mysql', 'port_no'))
-mysql_user_name = config.get('mysql', 'username')
-mysql_password = config.get('mysql', 'password')
-mysql_database_name = config.get('mysql', 'db_name')
 
 # Kết nối đến cơ sở dữ liệu MySQL
 connection = pymysql.connect(
-    host=mysql_host_name,
-    port=mysql_port_no,
-    user=mysql_user_name,
-    password=mysql_password,
-    database=mysql_database_name
+    host="monorail.proxy.rlwy.net",
+    port=40415,
+    user="root",
+    password="jAqSZpiuuqXOfyQFbtyMiKDSFwgvrxHd",
+    database="biden"
 )
 cursor = connection.cursor()
 
 def get_data_from_url():
     try:
-        url = f"https://api.apify.com/v2/acts/{apify_actors}/runs?token={apify_token}"
+        actors = "apidojo~tweet-scraper"
+        token = "apify_api_RiD1m2rnJRRJBb8evfT5HkRIRyjVMB3RV3Tw"
+        url = f"https://api.apify.com/v2/acts/{actors}/runs?token={token}"
         response = requests.get(url)
         
         item = response.json()
@@ -130,11 +114,11 @@ def get_location_info(location):
 def send_data_to_kafka(data):
     try:
         # Khởi tạo producer Kafka
-        producer = KafkaProducer(bootstrap_servers=[kafka_bootstrap_servers],
+        producer = KafkaProducer(bootstrap_servers=['leesin.click:9092'],
                                  value_serializer=lambda x: json.dumps(x).encode('utf-8'))
 
         # Gửi dữ liệu vào Kafka topic
-        producer.send(input_kafka_topic_name, value=data)
+        producer.send('BidenTopic', value=data)
 
         # Đóng producer
         producer.close()

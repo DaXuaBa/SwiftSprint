@@ -13,7 +13,7 @@ from pyspark.sql.functions import *
 from pyspark.sql.types import *
 from configparser import ConfigParser
 
-conf_file_path = "./lgbm/data_processing/"
+conf_file_path = "./SwiftSprint/biden/data_processing/"
 conf_file_name = conf_file_path + "stream_app.conf"
 config_obj = ConfigParser()
 config_read_obj = config_obj.read(conf_file_name)
@@ -23,41 +23,6 @@ kafka_port_no = config_obj.get('kafka', 'port_no')
 input_kafka_topic_name = config_obj.get('kafka', 'input_topic_name')
 output_kafka_topic_name = config_obj.get('kafka', 'output_topic_name')
 kafka_bootstrap_servers = kafka_host_name + ':' + kafka_port_no
-
-mysql_host_name = config_obj.get('mysql', 'host')
-mysql_port_no = config_obj.get('mysql', 'port_no')
-mysql_user_name = config_obj.get('mysql', 'username')
-mysql_password = config_obj.get('mysql', 'password')
-mysql_database_name = config_obj.get('mysql', 'db_name')
-mysql_driver = config_obj.get('mysql', 'driver')
-
-mysql_byname_table_name = config_obj.get('mysql', 'mysql_byname_tbl')
-mysql_bygender_table_name = config_obj.get('mysql', 'mysql_bygender_tbl')
-mysql_bymajors_table_name = config_obj.get('mysql', 'mysql_bymajors_tbl')
-mysql_bydepartment_table_name = config_obj.get('mysql', 'mysql_bydepartment_tbl')
-mysql_byyearstudy_table_name = config_obj.get('mysql', 'mysql_byyearstudy_tbl')
-
-mysql_jdbc_url = "jdbc:mysql://" + mysql_host_name + ":" + mysql_port_no + "/" + mysql_database_name
-
-db_properties = {}
-db_properties['user'] = mysql_user_name
-db_properties['password'] = mysql_password
-db_properties['driver'] = mysql_driver
-
-def save_to_mysql_table(current_df, epoc_id, mysql_table_name):
-
-    print("Printing MySQL table name: " + mysql_table_name)
-
-    mysql_jdbc_url = "jdbc:mysql://" + mysql_host_name + ":" + str(mysql_port_no) + "/" + mysql_database_name
-
-    current_df = current_df.withColumn('batch_no', lit(epoc_id))
-
-    current_df.write.jdbc(url = mysql_jdbc_url,
-                  table = mysql_table_name,
-                  mode = 'append',
-                  properties = db_properties)
-
-    print("Exit out of save to MySQL table function")
 
 emojis = {':)': 'smile', ':-)': 'smile', ';d': 'wink', ':-E': 'vampire', ':(': 'sad', 
           ':-(': 'sad', ':-<': 'sad', ':P': 'raspberry', ':O': 'surprised',
