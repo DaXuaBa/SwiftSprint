@@ -5,26 +5,24 @@ import json
 import pytz
 import requests
 import pymysql
-from configparser import ConfigParser
+import configparser
 
-conf_file_path = "./SwiftSprint/biden/"
-conf_file_name = conf_file_path + "infor.conf"
-config_obj = ConfigParser()
-config_read_obj = config_obj.read(conf_file_name)
+config = configparser.ConfigParser()
+config.read('./SwiftSprint/biden/infor.conf')
 
-kafka_host_name = config_obj.get('kafka', 'host')
-kafka_port_no = config_obj.get('kafka', 'port_no')
-input_kafka_topic_name = config_obj.get('kafka', 'input_topic_name')
+kafka_host_name = config.get('kafka', 'host')
+kafka_port_no = config.get('kafka', 'port_no')
+input_kafka_topic_name = config.get('kafka', 'input_topic_name')
 kafka_bootstrap_servers = kafka_host_name + ':' + kafka_port_no
 
-apify_actors = config_obj.get('apify', 'actors')
-apify_token = config_obj.get('apify', 'token')
+apify_actors = config.get('apify', 'actors')
+apify_token = config.get('apify', 'token')
 
-mysql_host_name = config_obj.get('mysql', 'host')
-mysql_port_no = int(config_obj.get('mysql', 'port_no'))
-mysql_user_name = config_obj.get('mysql', 'username')
-mysql_password = config_obj.get('mysql', 'password')
-mysql_database_name = config_obj.get('mysql', 'db_name')
+mysql_host_name = config.get('mysql', 'host')
+mysql_port_no = int(config.get('mysql', 'port_no'))
+mysql_user_name = config.get('mysql', 'username')
+mysql_password = config.get('mysql', 'password')
+mysql_database_name = config.get('mysql', 'db_name')
 
 # Kết nối đến cơ sở dữ liệu MySQL
 connection = pymysql.connect(
