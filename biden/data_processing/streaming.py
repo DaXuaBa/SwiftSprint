@@ -94,10 +94,14 @@ def preprocess_text(text):
     return processed_text
 
 def analyze_sentiment(text):
+    if isinstance(text, str):
+        text = [text]
     processed_text = preprocess_text(text)
     textdata = vectoriser.transform(processed_text)
     sentiment = LGBMmodel.predict(textdata)
-    return '1' if sentiment[0] == 1 else '0'
+    if len(sentiment) == 1:
+        sentiment = [sentiment]
+    return 1 if sentiment[0] == 1 else 0
 
 if __name__ == "__main__":
     print("Real-Time Data Processing Application Started ...")

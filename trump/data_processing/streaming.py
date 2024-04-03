@@ -92,9 +92,13 @@ def preprocess_text(text):
     return processed_text
 
 def analyze_sentiment(text):
+    if isinstance(text, str):
+        text = [text]
     processed_text = preprocess_text(text)
     textdata = vectoriser.transform(processed_text)
     sentiment = LGBMmodel.predict(textdata)
+    if len(sentiment) == 1:
+        sentiment = [sentiment]
     return 1 if sentiment[0] == 1 else 0
 
 if __name__ == "__main__":
@@ -113,7 +117,7 @@ if __name__ == "__main__":
         .add("tweet", StringType()) \
         .add("state", StringType())
     
-    predict_udf = udf(analyze_sentiment, IntegerType())
+    predict_udf = udf(lambda text: analyze_sentiment(text), IntegerType())
 
     tweet_df = spark \
         .readStream \
@@ -167,7 +171,8 @@ if __name__ == "__main__":
     #     .outputMode("update") \
     #     .option("checkpointLocation", "kafka-check-point-dir") \
     #     .start()
-
+    
+    tweet_write_stream.awaitTermination()
     tweet_process_stream.awaitTermination()
 
     print("Real-Time Data Processing Application Completed.")
