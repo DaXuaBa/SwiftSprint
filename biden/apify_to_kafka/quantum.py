@@ -182,7 +182,7 @@ def call_api():
                         user_join_date = convert_to_vietnam_time(user_join_date_str)
 
                         # Tạo câu lệnh SQL để chèn dữ liệu vào bảng
-                        sql = "INSERT INTO B (created_at, tweet_id, tweet, likes, retweet_count, user_id, \
+                        sql = "INSERT INTO TweetData (created_at, tweet_id, tweet, likes, retweet_count, user_id, \
                                 user_name, user_screen_name,user_description, user_join_date, user_followers_count, \
                                 user_location, latitude, longitude, state_1, state_2, country) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
                         val = (created_at, tweet_id, tweet, likes, retweet_count, user_id, user_name, user_screen_name,
