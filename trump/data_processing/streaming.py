@@ -131,13 +131,17 @@ if __name__ == "__main__":
         .select(from_json(col("value"), tweet_schema).alias("data")) \
         .select("data.*") \
         .withColumn("sentiment", predict_udf("tweet"))
+    
     tweet_df.printSchema()
     
     tweet_df_grouped = tweet_df.groupBy("state") \
         .agg(sum("sentiment").alias("sum_sentiment"))
 
     # Thêm cột 'timestamp' với thời gian hiện tại
-    tweet_df1 = tweet_df_grouped.withColumn("timestamp", current_timestamp())
+    tweet_df1 = tweet_df_grouped \
+        .withColumn("timestamp", current_timestamp()) \
+        .withColumn("user", lit("Trump"))
+    
     tweet_df1.printSchema()
 
     tweet_process_stream = tweet_df1 \
@@ -147,23 +151,21 @@ if __name__ == "__main__":
         .option("truncate", "false") \
         .format("console") \
         .start()
-    
-    tweet_df2 = tweet_df1.withColumn("user", lit("Trump"))
-    
-    tweet_df3 = tweet_df2.withColumn("value", to_json(struct(*tweet_df2.columns)))
-    tweet_df3.printSchema()
+        
+    # tweet_df3 = tweet_df1.withColumn("value", to_json(struct(*tweet_df1.columns)))
+    # tweet_df3.printSchema()
 
-    kafka_writer_query = tweet_df3 \
-        .writeStream \
-        .trigger(processingTime='10 seconds') \
-        .queryName("Kafka Writer") \
-        .format("kafka") \
-        .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
-        .option("topic", output_kafka_topic_name) \
-        .outputMode("update") \
-        .option("checkpointLocation", "kafka-check-point-dir") \
-        .start()
+    # kafka_writer_query = tweet_df3 \
+    #     .writeStream \
+    #     .trigger(processingTime='10 seconds') \
+    #     .queryName("Kafka Writer") \
+    #     .format("kafka") \
+    #     .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
+    #     .option("topic", output_kafka_topic_name) \
+    #     .outputMode("update") \
+    #     .option("checkpointLocation", "kafka-check-point-dir") \
+    #     .start()
     
-    kafka_writer_query.awaitTermination()
+    tweet_process_stream.awaitTermination()
 
     print("Real-Time Data Processing Application Completed.")
