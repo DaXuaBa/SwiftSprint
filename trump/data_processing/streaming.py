@@ -148,9 +148,12 @@ if __name__ == "__main__":
         .format("console") \
         .start()
     
-    tweet_df_with_value = tweet_df1.withColumn("value", to_json(struct(*tweet_df1.columns)))
+    tweet_df2 = tweet_df1.withColumn("user", lit("Trump"))
+    
+    tweet_df3 = tweet_df2.withColumn("value", to_json(struct(*tweet_df2.columns)))
+    tweet_df3.printSchema()
 
-    kafka_writer_query = tweet_df_with_value \
+    kafka_writer_query = tweet_df3 \
         .writeStream \
         .trigger(processingTime='10 seconds') \
         .queryName("Kafka Writer") \
@@ -161,7 +164,6 @@ if __name__ == "__main__":
         .option("checkpointLocation", "kafka-check-point-dir") \
         .start()
     
-    tweet_process_stream.awaitTermination()
     kafka_writer_query.awaitTermination()
 
     print("Real-Time Data Processing Application Completed.")
