@@ -139,14 +139,14 @@ if __name__ == "__main__":
 
     # Thêm cột 'timestamp' với thời gian hiện tại
     tweet_df1 = tweet_df_grouped \
-        .withColumn("timestamp", current_timestamp()) \
+        .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss')) \
         .withColumn("user", lit("Trump"))
     
     tweet_df1.printSchema()
 
     tweet_process_stream = tweet_df1 \
         .writeStream \
-        .trigger(processingTime='10 seconds') \
+        .trigger(processingTime='30 seconds') \
         .outputMode("update") \
         .option("truncate", "false") \
         .format("console") \
@@ -155,7 +155,7 @@ if __name__ == "__main__":
     kafka_writer_query = tweet_df1 \
         .selectExpr("user as key", "to_json(struct(*)) as value") \
         .writeStream \
-        .trigger(processingTime='10 seconds') \
+        .trigger(processingTime='30 seconds') \
         .queryName("Kafka Writer") \
         .format("kafka") \
         .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \

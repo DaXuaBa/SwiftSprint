@@ -11,17 +11,15 @@ import time
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
-from configparser import ConfigParser
+import configparser
 
-conf_file_path = "./SwiftSprint/biden/data_processing/"
-conf_file_name = conf_file_path + "stream_app.conf"
-config_obj = ConfigParser()
-config_read_obj = config_obj.read(conf_file_name)
+config = configparser.ConfigParser()
+config.read('./SwiftSprint/biden/data_processing/stream_app.conf')
 
-kafka_host_name = config_obj.get('kafka', 'host')
-kafka_port_no = config_obj.get('kafka', 'port_no')
-input_kafka_topic_name = config_obj.get('kafka', 'input_topic_name')
-output_kafka_topic_name = config_obj.get('kafka', 'output_topic_name')
+kafka_host_name = config.get('kafka', 'host')
+kafka_port_no = config.get('kafka', 'port_no')
+input_kafka_topic_name = config.get('kafka', 'input_topic_name')
+output_kafka_topic_name = config.get('kafka', 'output_topic_name')
 kafka_bootstrap_servers = kafka_host_name + ':' + kafka_port_no
 
 emojis = {':)': 'smile', ':-)': 'smile', ';d': 'wink', ':-E': 'vampire', ':(': 'sad', 
@@ -115,6 +113,12 @@ if __name__ == "__main__":
 
     spark.sparkContext.setLogLevel("ERROR")
 
+    tweet_schema = StructType() \
+        .add("tweet", StringType()) \
+        .add("state", StringType())
+    
+    predict_udf = udf(lambda text: analyze_sentiment(text), IntegerType())
+
     tweet_df = spark \
         .readStream \
         .format("kafka") \
@@ -122,54 +126,45 @@ if __name__ == "__main__":
         .option("subscribe", input_kafka_topic_name) \
         .option("startingOffsets", "latest") \
         .load()
-    print("Printing Schema from Apache Kafka: ")
-    tweet_df.printSchema()
 
-    tweet_df1 = tweet_df.selectExpr("CAST(value AS STRING)", "timestamp")
-
-    tweet_schema = StructType() \
-        .add("created_at", StringType()) \
-        .add("tweet_id", StringType()) \
-        .add("tweet", StringType())
-
-    tweet_df2 = tweet_df1\
-        .select(from_json(col("value"), tweet_schema)\
-        .alias("data"), "timestamp")
-
-    tweet_df3 = tweet_df2.select("data.*", "timestamp")
-
-    tweet_df3 = tweet_df3.withColumn("partition_date", to_date("created_at"))
-    tweet_df3 = tweet_df3.withColumn("partition_hour", hour(to_timestamp("created_at", 'yyyy-MM-dd HH:mm:ss')))
-
-    tweet_agg_write_stream_pre = tweet_df3 \
-        .writeStream \
-        .trigger(processingTime='10 seconds') \
-        .outputMode("update") \
-        .option("truncate", "false")\
-        .format("console") \
-        .start()
+    tweet_df = tweet_df.selectExpr("CAST(value AS STRING)") \
+        .select(from_json(col("value"), tweet_schema).alias("data")) \
+        .select("data.*") \
+        .withColumn("sentiment", predict_udf("tweet"))
     
-    print("Printing Schema of Bronze Layer: ")
-    tweet_df3.printSchema()
+    tweet_df.printSchema()
+    
+    tweet_df_grouped = tweet_df.groupBy("state") \
+        .agg(sum("sentiment").alias("sum_sentiment"))
 
-    predict_udf = udf(lambda text: analyze_sentiment(text), StringType())
+    # Thêm cột 'timestamp' với thời gian hiện tại
+    tweet_df1 = tweet_df_grouped \
+        .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss')) \
+        .withColumn("user", lit("Biden"))
+    
+    tweet_df1.printSchema()
 
-        # Áp dụng hàm dự đoán cho cột "tweet" trong DataFrame
-    tweet_df4 = tweet_df3.withColumn("sentiment", predict_udf("tweet"))
-
-    # Print the schema of the DataFrame
-    print("Printing Schema of Sentiment: ")
-    tweet_df4.printSchema()
-
-    # Ghi DataFrame kết quả ra console
-    tweet_agg_write_stream = tweet_df4 \
+    tweet_process_stream = tweet_df1 \
         .writeStream \
-        .trigger(processingTime='10 seconds') \
+        .trigger(processingTime='30 seconds') \
         .outputMode("update") \
         .option("truncate", "false") \
         .format("console") \
         .start()
+        
+    kafka_writer_query = tweet_df1 \
+        .selectExpr("user as key", "to_json(struct(*)) as value") \
+        .writeStream \
+        .trigger(processingTime='30 seconds') \
+        .queryName("Kafka Writer") \
+        .format("kafka") \
+        .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
+        .option("topic", output_kafka_topic_name) \
+        .outputMode("update") \
+        .option("checkpointLocation", "kafka-check-point-dir") \
+        .start()
 
-    tweet_agg_write_stream.awaitTermination()
+    tweet_process_stream.awaitTermination()
+    kafka_writer_query.awaitTermination()
 
     print("Real-Time Data Processing Application Completed.")
