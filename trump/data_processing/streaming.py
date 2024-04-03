@@ -131,26 +131,13 @@ if __name__ == "__main__":
         .select(from_json(col("value"), tweet_schema).alias("data")) \
         .select("data.*") \
         .withColumn("sentiment", predict_udf("tweet"))
-    
-    print("Printing Dataframe of tweet: ")
     tweet_df.printSchema()
-    
-    # Ghi DataFrame kết quả ra console
-    tweet_write_stream = tweet_df \
-        .writeStream \
-        .trigger(processingTime='10 seconds') \
-        .outputMode("update") \
-        .option("truncate", "false") \
-        .format("console") \
-        .start()
     
     tweet_df_grouped = tweet_df.groupBy("state") \
         .agg(sum("sentiment").alias("sum_sentiment"))
 
     # Thêm cột 'timestamp' với thời gian hiện tại
     tweet_df1 = tweet_df_grouped.withColumn("timestamp", current_timestamp())
-
-    print("Printing count of tweet: ")
     tweet_df1.printSchema()
 
     tweet_process_stream = tweet_df1 \
@@ -161,18 +148,16 @@ if __name__ == "__main__":
         .format("console") \
         .start()
     
-    # kafka_writer_query = kafka_orders_df4 \
-    #     .writeStream \
-    #     .trigger(processingTime='10 seconds') \
-    #     .queryName("Kafka Writer") \
-    #     .format("kafka") \
-    #     .option("kafka.bootstrap.servers", "localhost:9092") \
-    #     .option("topic", output_kafka_topic_name) \
-    #     .outputMode("update") \
-    #     .option("checkpointLocation", "kafka-check-point-dir") \
-    #     .start()
-    
-    tweet_write_stream.awaitTermination()
+    kafka_writer_query = tweet_df1 \
+        .writeStream \
+        .trigger(processingTime='10 seconds') \
+        .queryName("Kafka Writer") \
+        .format("kafka") \
+        .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
+        .option("topic", output_kafka_topic_name) \
+        .outputMode("append") \
+        .start()
+
     tweet_process_stream.awaitTermination()
 
     print("Real-Time Data Processing Application Completed.")
