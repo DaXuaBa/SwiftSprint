@@ -151,8 +151,10 @@ if __name__ == "__main__":
         .option("truncate", "false") \
         .format("console") \
         .start()
+    
+    tweet_df2 = tweet_df1.filter(col("sum_sentiment") != 0)
         
-    kafka_writer_query = tweet_df1 \
+    kafka_writer_query = tweet_df2 \
         .selectExpr("user as key", "to_json(struct(*)) as value") \
         .writeStream \
         .trigger(processingTime='30 seconds') \
