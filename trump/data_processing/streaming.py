@@ -123,7 +123,7 @@ if __name__ == "__main__":
         .option("startingOffsets", "latest") \
         .load()
 
-    tweet_df = tweet_df.selectExpr("CAST(value AS STRING)", "timestamp") \
+    tweet_df = tweet_df.selectExpr("CAST(value AS STRING)") \
         .select(from_json(col("value"), tweet_schema).alias("data")) \
         .select("data.*") \
         .withColumn("sentiment", predict_udf("tweet"))
