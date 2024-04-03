@@ -124,10 +124,13 @@ if __name__ == "__main__":
         .load()
 
     tweet_df = tweet_df.selectExpr("CAST(value AS STRING)", "timestamp") \
-        .select(from_json(col("value"), tweet_schema).alias("data"), "timestamp") \
-        .select("data.*", "timestamp") \
+        .select(from_json(col("value"), tweet_schema).alias("data")) \
+        .select("data.*") \
         .withColumn("sentiment", predict_udf("tweet"))
-
+    
+    print("Printing Dataframe of tweet: ")
+    tweet_df.printSchema()
+    
     # Ghi DataFrame kết quả ra console
     tweet_write_stream = tweet_df \
         .writeStream \
@@ -137,20 +140,22 @@ if __name__ == "__main__":
         .format("console") \
         .start()
     
-    # tweet_df5 = tweet_df4.groupBy("state") \
-    #     .agg({'sentiment': 'sum'}) \
-    #     .select("state", col("timestamp").alias("timestamp"), "sum(sentiment)").alias("total_tweet")
+    tweet_df_grouped = tweet_df.groupBy("state") \
+        .agg(sum("sentiment").alias("sum_sentiment"))
 
-    # print("Printing count of tweet: ")
-    # tweet_df5.printSchema()
+    # Thêm cột 'timestamp' với thời gian hiện tại
+    tweet_df1 = tweet_df_grouped.withColumn("timestamp", current_timestamp())
 
-    # tweet_process_stream = tweet_df5 \
-    #     .writeStream \
-    #     .trigger(processingTime='10 seconds') \
-    #     .outputMode("update") \
-    #     .option("truncate", "false") \
-    #     .format("console") \
-    #     .start()
+    print("Printing count of tweet: ")
+    tweet_df1.printSchema()
+
+    tweet_process_stream = tweet_df1 \
+        .writeStream \
+        .trigger(processingTime='10 seconds') \
+        .outputMode("update") \
+        .option("truncate", "false") \
+        .format("console") \
+        .start()
     
     # kafka_writer_query = kafka_orders_df4 \
     #     .writeStream \
@@ -163,6 +168,6 @@ if __name__ == "__main__":
     #     .option("checkpointLocation", "kafka-check-point-dir") \
     #     .start()
 
-    tweet_write_stream.awaitTermination()
+    tweet_process_stream.awaitTermination()
 
     print("Real-Time Data Processing Application Completed.")
