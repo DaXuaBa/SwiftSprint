@@ -152,20 +152,19 @@ if __name__ == "__main__":
         .format("console") \
         .start()
         
-    # tweet_df3 = tweet_df1.withColumn("value", to_json(struct(*tweet_df1.columns)))
-    # tweet_df3.printSchema()
+    kafka_writer_query = tweet_df1 \
+        .selectExpr("user as key", "to_json(struct(*)) as value") \
+        .writeStream \
+        .trigger(processingTime='10 seconds') \
+        .queryName("Kafka Writer") \
+        .format("kafka") \
+        .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
+        .option("topic", output_kafka_topic_name) \
+        .outputMode("update") \
+        .option("checkpointLocation", "kafka-check-point-dir") \
+        .start()
 
-    # kafka_writer_query = tweet_df3 \
-    #     .writeStream \
-    #     .trigger(processingTime='10 seconds') \
-    #     .queryName("Kafka Writer") \
-    #     .format("kafka") \
-    #     .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
-    #     .option("topic", output_kafka_topic_name) \
-    #     .outputMode("update") \
-    #     .option("checkpointLocation", "kafka-check-point-dir") \
-    #     .start()
-    
     tweet_process_stream.awaitTermination()
+    kafka_writer_query.awaitTermination()
 
     print("Real-Time Data Processing Application Completed.")
