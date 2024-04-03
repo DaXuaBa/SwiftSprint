@@ -14,7 +14,7 @@ from pyspark.sql.types import *
 import configparser
 
 config = configparser.ConfigParser()
-config.read('./SwiftSprint/biden/data_processing/stream_app.conf')
+config.read('./SwiftSprint/trump/data_processing/stream_app.conf')
 
 kafka_host_name = config.get('kafka', 'host')
 kafka_port_no = config.get('kafka', 'port_no')
@@ -109,6 +109,12 @@ if __name__ == "__main__":
 
     spark.sparkContext.setLogLevel("ERROR")
 
+    tweet_schema = StructType() \
+        .add("tweet", StringType()) \
+        .add("state", StringType())
+    
+    predict_udf = udf(analyze_sentiment, IntegerType())
+
     tweet_df = spark \
         .readStream \
         .format("kafka") \
@@ -116,32 +122,14 @@ if __name__ == "__main__":
         .option("subscribe", input_kafka_topic_name) \
         .option("startingOffsets", "latest") \
         .load()
-    print("Printing Schema from Apache Kafka: ")
-    tweet_df.printSchema()
 
-    tweet_df1 = tweet_df.selectExpr("CAST(value AS STRING)", "timestamp")
-
-    tweet_schema = StructType() \
-        .add("tweet", StringType()) \
-        .add("state", StringType())
-
-    tweet_df2 = tweet_df1\
-        .select(from_json(col("value"), tweet_schema)\
-        .alias("data"), "timestamp")
-
-    tweet_df3 = tweet_df2.select("data.*", "timestamp")
-
-    predict_udf = udf(lambda text: analyze_sentiment(text), IntegerType())
-
-        # Áp dụng hàm dự đoán cho cột "tweet" trong DataFrame
-    tweet_df4 = tweet_df3.withColumn("sentiment", predict_udf("tweet"))
-
-    # Print the schema of the DataFrame
-    print("Printing Schema of Sentiment: ")
-    tweet_df4.printSchema()
+    tweet_df = tweet_df.selectExpr("CAST(value AS STRING)", "timestamp") \
+        .select(from_json(col("value"), tweet_schema).alias("data"), "timestamp") \
+        .select("data.*", "timestamp") \
+        .withColumn("sentiment", predict_udf("tweet"))
 
     # Ghi DataFrame kết quả ra console
-    tweet_agg_write_stream = tweet_df4 \
+    tweet_write_stream = tweet_df \
         .writeStream \
         .trigger(processingTime='10 seconds') \
         .outputMode("update") \
@@ -149,22 +137,20 @@ if __name__ == "__main__":
         .format("console") \
         .start()
     
-    tweet_df5 = tweet_df4.groupBy("state") \
-        .agg({'sentiment': 'sum'}) \
-        .select("state", col("sum(sentiment)").alias("total_tweet")) \
-        .join(tweet_df4.select("state", "timestamp"), "state", "inner") \
-        .select("state", "total_tweet", "timestamp")
-    
-    print("Printing count of tweet: ")
-    tweet_df5.printSchema()
-    
-    tweet_process_stream = tweet_df5 \
-        .writeStream \
-        .trigger(processingTime='10 seconds') \
-        .outputMode("update") \
-        .option("truncate", "false") \
-        .format("console") \
-        .start()
+    # tweet_df5 = tweet_df4.groupBy("state") \
+    #     .agg({'sentiment': 'sum'}) \
+    #     .select("state", col("timestamp").alias("timestamp"), "sum(sentiment)").alias("total_tweet")
+
+    # print("Printing count of tweet: ")
+    # tweet_df5.printSchema()
+
+    # tweet_process_stream = tweet_df5 \
+    #     .writeStream \
+    #     .trigger(processingTime='10 seconds') \
+    #     .outputMode("update") \
+    #     .option("truncate", "false") \
+    #     .format("console") \
+    #     .start()
     
     # kafka_writer_query = kafka_orders_df4 \
     #     .writeStream \
@@ -177,6 +163,6 @@ if __name__ == "__main__":
     #     .option("checkpointLocation", "kafka-check-point-dir") \
     #     .start()
 
-    tweet_process_stream.awaitTermination()
+    tweet_write_stream.awaitTermination()
 
     print("Real-Time Data Processing Application Completed.")
