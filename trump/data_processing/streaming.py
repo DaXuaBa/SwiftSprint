@@ -149,17 +149,18 @@ if __name__ == "__main__":
         .start()
     
     kafka_writer_query = tweet_df1 \
+        .selectExpr("to_json(struct(*)) AS value") \
         .writeStream \
         .trigger(processingTime='10 seconds') \
         .queryName("Kafka Writer") \
         .format("kafka") \
         .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
         .option("topic", output_kafka_topic_name) \
-        .outputMode("update") \
+        .outputMode("append") \
         .option("checkpointLocation", "kafka-check-point-dir") \
         .start()
     
-    kafka_writer_query.awaitTermination()
     tweet_process_stream.awaitTermination()
+    kafka_writer_query.awaitTermination()
 
     print("Real-Time Data Processing Application Completed.")
