@@ -148,15 +148,16 @@ if __name__ == "__main__":
         .format("console") \
         .start()
     
-    kafka_writer_query = tweet_df1 \
-        .selectExpr("to_json(struct(*)) AS value") \
+    tweet_df_with_value = tweet_df1.withColumn("value", to_json(struct(*tweet_df1.columns)))
+
+    kafka_writer_query = tweet_df_with_value \
         .writeStream \
         .trigger(processingTime='10 seconds') \
         .queryName("Kafka Writer") \
         .format("kafka") \
         .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
         .option("topic", output_kafka_topic_name) \
-        .outputMode("append") \
+        .outputMode("update") \
         .option("checkpointLocation", "kafka-check-point-dir") \
         .start()
     
