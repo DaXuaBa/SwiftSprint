@@ -155,9 +155,11 @@ if __name__ == "__main__":
         .format("kafka") \
         .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
         .option("topic", output_kafka_topic_name) \
-        .outputMode("append") \
+        .outputMode("update") \
+        .option("checkpointLocation", "kafka-check-point-dir") \
         .start()
-
+    
+    kafka_writer_query.awaitTermination()
     tweet_process_stream.awaitTermination()
 
     print("Real-Time Data Processing Application Completed.")
