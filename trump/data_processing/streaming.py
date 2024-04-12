@@ -159,7 +159,7 @@ if __name__ == "__main__":
         .withColumn("sentiment", predict_udf("tweet"))
         
     tweet_df1 = tweet_df.groupBy("state") \
-        .agg(sum("sentiment").alias("total"))
+        .agg(sum("sentiment").alias("sum_sentiment")) \
     
     tweet_df2 = tweet_df1 \
         .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss')) \
@@ -175,7 +175,7 @@ if __name__ == "__main__":
         .start()
     
     kafka_writer_query = tweet_df2 \
-        .selectExpr("name as key", "to_json(struct(*)) as value") \
+        .selectExpr("user as key", "to_json(struct(*)) as value") \
         .writeStream \
         .trigger(processingTime='30 seconds') \
         .queryName("Kafka Writer") \
