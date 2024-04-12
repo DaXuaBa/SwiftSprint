@@ -191,11 +191,8 @@ if __name__ == "__main__":
     
     tweet_df4 = tweet_df3 \
         .withColumn("name", lit("trump"))
-        
-    tweet_df5 = tweet_df4.select("name", "state_code", "total")
-    tweet_df5.printSchema()
 
-    send_to_mysql = tweet_df5 \
+    send_to_mysql = tweet_df4 \
         .writeStream \
         .trigger(processingTime='30 seconds') \
         .outputMode("update") \
