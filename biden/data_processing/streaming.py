@@ -163,12 +163,10 @@ if __name__ == "__main__":
 
     tweet_df2 = tweet_df1 \
         .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss')) \
-        .withColumn("user", lit("Trump"))
+        .withColumn("user", lit("Biden"))
+    tweet_df2.printSchema()
 
-    tweet_df3 = tweet_df2.select("user", "state", "sum_sentiment", "timestamp")
-    tweet_df3.printSchema()
-
-    tweet_process_stream = tweet_df3 \
+    tweet_process_stream = tweet_df2 \
         .writeStream \
         .trigger(processingTime='30 seconds') \
         .outputMode("update") \
@@ -176,7 +174,7 @@ if __name__ == "__main__":
         .format("console") \
         .start()
                 
-    kafka_writer_query = tweet_df3 \
+    kafka_writer_query = tweet_df2 \
         .selectExpr("user as key", "to_json(struct(*)) as value") \
         .writeStream \
         .trigger(processingTime='30 seconds') \
@@ -188,16 +186,16 @@ if __name__ == "__main__":
         .option("checkpointLocation", "kafka-check-point-dir") \
         .start()
     
-    tweet_df4 = tweet_df.groupBy("state_code") \
+    tweet_df3 = tweet_df.groupBy("state_code") \
         .agg(sum("sentiment").alias("total"))
     
-    tweet_df5 = tweet_df4 \
-        .withColumn("name", lit("trump"))
+    tweet_df4 = tweet_df3 \
+        .withColumn("name", lit("biden"))
         
-    tweet_df6 = tweet_df5.select("name", "state_code", "total")
-    tweet_df6.printSchema()
+    tweet_df5 = tweet_df4.select("name", "state_code", "total")
+    tweet_df5.printSchema()
 
-    send_to_mysql = tweet_df6 \
+    send_to_mysql = tweet_df5 \
         .writeStream \
         .trigger(processingTime='30 seconds') \
         .outputMode("update") \
