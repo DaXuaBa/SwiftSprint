@@ -192,30 +192,34 @@ def call_api():
                         cursor.execute(sql, val)
 
                         states = {
-                            'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'Florida',
-                            'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine',
-                            'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska',
-                            'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio',
-                            'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas',
-                            'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming', 'District of Columbia',
-                            'Guam', 'Puerto Rico'
+                            'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA', 'Colorado': 'CO',
+                            'Connecticut': 'CT', 'Delaware': 'DE', 'Florida': 'FL', 'Georgia': 'GA', 'Hawaii': 'HI', 'Idaho': 'ID',
+                            'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA', 'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA',
+                            'Maine': 'ME', 'Maryland': 'MD', 'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS',
+                            'Missouri': 'MO', 'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
+                            'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH', 'Oklahoma': 'OK',
+                            'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC', 'South Dakota': 'SD',
+                            'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT', 'Virginia': 'VA', 'Washington': 'WA',
+                            'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY'
                         }
 
                         if country == 'United States':
                             if state_1 in states:
                                 state_to_send = state_1
+                                state_code_to_send = states[state_1]
                             elif state_2 in states:
                                 state_to_send = state_2
+                                state_code_to_send = states[state_2]
                             else:
-                                state_to_send = None  # Nếu không có state nào trong danh sách states, gán None
+                                state_to_send = None  
+                                state_code_to_send = None
 
-                            # Kiểm tra state_to_send có giá trị không và gửi dữ liệu vào Kafka
                             if state_to_send:
                                 send_data_to_kafka({
                                     "tweet": tweet,
-                                    "state": state_to_send
+                                    "state": state_to_send,
+                                    "state_code": state_code_to_send
                                 })
-                # Lưu các thay đổi vào cơ sở dữ liệu
                 connection.commit()
 
                 current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')

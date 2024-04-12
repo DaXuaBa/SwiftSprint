@@ -7,7 +7,6 @@ from nltk import download
 download('stopwords')
 download('wordnet')
 
-import time
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
@@ -21,6 +20,33 @@ kafka_port_no = config.get('kafka', 'port_no')
 input_kafka_topic_name = config.get('kafka', 'input_topic_name')
 output_kafka_topic_name = config.get('kafka', 'output_topic_name')
 kafka_bootstrap_servers = kafka_host_name + ':' + kafka_port_no
+
+mysql_host_name = config.get('mysql', 'host')
+mysql_port_no = config.get('mysql', 'port_no')
+mysql_user_name = config.get('mysql', 'username')
+mysql_password = config.get('mysql', 'password')
+mysql_database_name = config.get('mysql', 'db_name')
+mysql_driver = config.get('mysql', 'driver')
+
+mysql_daxu_table_name = config.get('mysql', 'mysql_daxu_tbl')
+
+mysql_jdbc_url = "jdbc:mysql://" + mysql_host_name + ":" + mysql_port_no + "/" + mysql_database_name
+
+db_properties = {}
+db_properties['user'] = mysql_user_name
+db_properties['password'] = mysql_password
+db_properties['driver'] = mysql_driver
+
+def save_to_mysql_table(current_df, epoc_id, mysql_table_name):
+
+    mysql_jdbc_url = "jdbc:mysql://" + mysql_host_name + ":" + str(mysql_port_no) + "/" + mysql_database_name
+
+    current_df = current_df.withColumn('batch_no', lit(epoc_id))
+
+    current_df.write.jdbc(url = mysql_jdbc_url,
+                  table = mysql_table_name,
+                  mode = 'append',
+                  properties = db_properties)
 
 emojis = {':)': 'smile', ':-)': 'smile', ';d': 'wink', ':-E': 'vampire', ':(': 'sad', 
           ':-(': 'sad', ':-<': 'sad', ':P': 'raspberry', ':O': 'surprised',
@@ -103,7 +129,6 @@ def analyze_sentiment(text):
 
 if __name__ == "__main__":
     print("Real-Time Data Processing Application Started ...")
-    print(time.strftime("%Y-%m-%d %H:%M:%S"))
 
     spark = SparkSession \
         .builder \
@@ -115,7 +140,8 @@ if __name__ == "__main__":
 
     tweet_schema = StructType() \
         .add("tweet", StringType()) \
-        .add("state", StringType())
+        .add("state", StringType()) \
+        .add("state_code", StringType())
     
     predict_udf = udf(lambda text: analyze_sentiment(text), IntegerType())
 
@@ -132,30 +158,27 @@ if __name__ == "__main__":
         .select("data.*") \
         .withColumn("sentiment", predict_udf("tweet"))
     
-    tweet_df.printSchema()
-    
-    tweet_df_grouped = tweet_df.groupBy("state") \
-        .agg(sum("sentiment").alias("sum_sentiment"))
+    tweet_df1 = tweet_df.groupBy("state") \
+        .agg(sum("sentiment").alias("total"))
 
-    # Thêm cột 'timestamp' với thời gian hiện tại
-    tweet_df1 = tweet_df_grouped \
+    tweet_df2 = tweet_df1 \
         .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss')) \
-        .withColumn("user", lit("Biden"))
-    
-    tweet_df1.printSchema()
+        .withColumn("name", lit("Biden"))
+    tweet_df2.printSchema()
 
-    tweet_process_stream = tweet_df1 \
+    tweet_df3 = tweet_df2.select("name", "state", "total", "timestamp")
+    tweet_df3.printSchema()
+
+    tweet_process_stream = tweet_df3 \
         .writeStream \
         .trigger(processingTime='30 seconds') \
         .outputMode("update") \
         .option("truncate", "false") \
         .format("console") \
         .start()
-        
-    tweet_df2 = tweet_df1.filter(col("sum_sentiment") != 0)
-        
-    kafka_writer_query = tweet_df2 \
-        .selectExpr("user as key", "to_json(struct(*)) as value") \
+                
+    kafka_writer_query = tweet_df3 \
+        .selectExpr("name as key", "to_json(struct(*)) as value") \
         .writeStream \
         .trigger(processingTime='30 seconds') \
         .queryName("Kafka Writer") \
@@ -165,8 +188,19 @@ if __name__ == "__main__":
         .outputMode("update") \
         .option("checkpointLocation", "kafka-check-point-dir") \
         .start()
+    
+    tweet_df4 = tweet_df2.select("name", "state_code", "total")
+    tweet_df4.printSchema()
+
+    send_to_mysql = tweet_df4 \
+        .writeStream \
+        .trigger(processingTime='30 seconds') \
+        .outputMode("update") \
+        .foreachBatch(lambda current_df, epoc_id: save_to_mysql_table(current_df, epoc_id, mysql_daxu_table_name)) \
+        .start()
 
     tweet_process_stream.awaitTermination()
     kafka_writer_query.awaitTermination()
+    send_to_mysql.awaitTermination()
 
     print("Real-Time Data Processing Application Completed.")
