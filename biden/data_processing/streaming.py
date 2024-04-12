@@ -158,15 +158,29 @@ if __name__ == "__main__":
         .select("data.*") \
         .withColumn("sentiment", predict_udf("tweet"))
     
-    tweet_df1 = tweet_df.groupBy("state") \
-        .agg(sum("sentiment").alias("sum_sentiment"))
-
+    tweet_df1 = tweet_df.groupBy("state_code") \
+        .agg(sum("sentiment").alias("total"))
+    
     tweet_df2 = tweet_df1 \
-        .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss')) \
-        .withColumn("user", lit("Biden"))
+        .withColumn("name", lit("biden"))
     tweet_df2.printSchema()
 
-    tweet_process_stream = tweet_df2 \
+    tweet_df2 \
+        .writeStream \
+        .trigger(processingTime='30 seconds') \
+        .outputMode("update") \
+        .foreachBatch(lambda current_df, epoc_id: save_to_mysql_table(current_df, epoc_id, mysql_daxu_table_name)) \
+        .start()
+    
+    tweet_df3 = tweet_df.groupBy("state") \
+        .agg(sum("sentiment").alias("sum_sentiment")) \
+    
+    tweet_df4 = tweet_df3 \
+        .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss')) \
+        .withColumn("user", lit("Biden"))
+    tweet_df4.printSchema()
+
+    tweet_process_stream = tweet_df4 \
         .writeStream \
         .trigger(processingTime='30 seconds') \
         .outputMode("update") \
@@ -174,7 +188,7 @@ if __name__ == "__main__":
         .format("console") \
         .start()
                 
-    kafka_writer_query = tweet_df2 \
+    kafka_writer_query = tweet_df4 \
         .selectExpr("user as key", "to_json(struct(*)) as value") \
         .writeStream \
         .trigger(processingTime='30 seconds') \
@@ -185,22 +199,8 @@ if __name__ == "__main__":
         .outputMode("update") \
         .option("checkpointLocation", "kafka-check-point-dir") \
         .start()
-    
-    tweet_df3 = tweet_df.groupBy("state_code") \
-        .agg(sum("sentiment").alias("total"))
-    
-    tweet_df4 = tweet_df3 \
-        .withColumn("name", lit("biden"))
-
-    send_to_mysql = tweet_df4 \
-        .writeStream \
-        .trigger(processingTime='30 seconds') \
-        .outputMode("update") \
-        .foreachBatch(lambda current_df, epoc_id: save_to_mysql_table(current_df, epoc_id, mysql_daxu_table_name)) \
-        .start()
 
     tweet_process_stream.awaitTermination()
     kafka_writer_query.awaitTermination()
-    send_to_mysql.awaitTermination()
 
     print("Real-Time Data Processing Application Completed.")
