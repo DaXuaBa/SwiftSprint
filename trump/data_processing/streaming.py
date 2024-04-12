@@ -151,6 +151,7 @@ if __name__ == "__main__":
         .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
         .option("subscribe", input_kafka_topic_name) \
         .option("startingOffsets", "latest") \
+        .option("failOnDataLoss", "false") \
         .load()
 
     tweet_df = tweet_df.selectExpr("CAST(value AS STRING)") \
