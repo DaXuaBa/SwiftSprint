@@ -162,15 +162,13 @@ if __name__ == "__main__":
         .agg(sum("sentiment").alias("total"))
     
     tweet_df2 = tweet_df1 \
-        .withColumn("name", lit("Trump"))
+        .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss')) \
+        .withColumn("user", lit("Trump"))
 
-    tweet_df3 = tweet_df2 \
-        .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss'))
+    tweet_df3 = tweet_df2.select("user", "state", "sum_sentiment", "timestamp")
+    tweet_df3.printSchema()
 
-    tweet_df4 = tweet_df3.select("name", "state", "total", "timestamp")
-    tweet_df4.printSchema()
-
-    tweet_process_stream = tweet_df4 \
+    tweet_process_stream = tweet_df3 \
         .writeStream \
         .trigger(processingTime='30 seconds') \
         .outputMode("update") \
@@ -178,7 +176,7 @@ if __name__ == "__main__":
         .format("console") \
         .start()
     
-    kafka_writer_query = tweet_df4 \
+    kafka_writer_query = tweet_df3 \
         .selectExpr("name as key", "to_json(struct(*)) as value") \
         .writeStream \
         .trigger(processingTime='30 seconds') \
@@ -190,10 +188,16 @@ if __name__ == "__main__":
         .option("checkpointLocation", "kafka-check-point-dir") \
         .start()
     
-    tweet_df5 = tweet_df2.select("name", "state_code", "total")
-    tweet_df5.printSchema()
+    tweet_df4 = tweet_df.groupBy("state_code") \
+        .agg(sum("sentiment").alias("total"))
+    
+    tweet_df5 = tweet_df4 \
+        .withColumn("name", lit("trump"))
+        
+    tweet_df6 = tweet_df5.select("name", "state_code", "total")
+    tweet_df6.printSchema()
 
-    send_to_mysql = tweet_df5 \
+    send_to_mysql = tweet_df6 \
         .writeStream \
         .trigger(processingTime='30 seconds') \
         .outputMode("update") \
@@ -203,6 +207,5 @@ if __name__ == "__main__":
     tweet_process_stream.awaitTermination()
     kafka_writer_query.awaitTermination()
     send_to_mysql.awaitTermination()
-
 
     print("Real-Time Data Processing Application Completed.")
