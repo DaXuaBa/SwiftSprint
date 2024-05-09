@@ -151,7 +151,6 @@ if __name__ == "__main__":
         .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
         .option("subscribe", input_kafka_topic_name) \
         .option("startingOffsets", "latest") \
-        .option("failOnDataLoss", "false") \
         .load()
 
     tweet_df = tweet_df.selectExpr("CAST(value AS STRING)") \
@@ -177,8 +176,10 @@ if __name__ == "__main__":
         .agg(sum("sentiment").alias("sum_sentiment")) \
     
     tweet_df4 = tweet_df3 \
+        .join(tweet_df, tweet_df.state == tweet_df3.state, "inner") \
+        .select("state", "state_code", "sum_sentiment", "timestamp", "user") \
         .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss')) \
-        .withColumn("user", lit("Trump"))
+        .withColumn("user", lit("trump"))
     tweet_df4.printSchema()
 
     tweet_process_stream = tweet_df4 \
