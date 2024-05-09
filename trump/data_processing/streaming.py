@@ -172,12 +172,10 @@ if __name__ == "__main__":
         .foreachBatch(lambda current_df, epoc_id: save_to_mysql_table(current_df, epoc_id, mysql_daxu_table_name)) \
         .start()
         
-    tweet_df3 = tweet_df.groupBy("state") \
-        .agg(sum("sentiment").alias("sum_sentiment")) \
+    tweet_df3 = tweet_df.groupBy("state", "state_code") \
+        .agg(sum("sentiment").alias("sum_sentiment"))
     
     tweet_df4 = tweet_df3 \
-        .join(tweet_df, tweet_df["state"] == tweet_df3["state"], "inner") \
-        .select(tweet_df["state"], tweet_df["state_code"], "sum_sentiment", "timestamp", "user") \
         .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss')) \
         .withColumn("user", lit("trump"))
     tweet_df4.printSchema()
