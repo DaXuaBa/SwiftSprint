@@ -176,8 +176,8 @@ if __name__ == "__main__":
         .agg(sum("sentiment").alias("sum_sentiment")) \
     
     tweet_df4 = tweet_df3 \
-        .join(tweet_df, tweet_df.state == tweet_df3.state, "inner") \
-        .select("state", "state_code", "sum_sentiment", "timestamp", "user") \
+        .join(tweet_df, tweet_df["state"] == tweet_df3["state"], "inner") \
+        .select(tweet_df["state"], tweet_df["state_code"], "sum_sentiment", "timestamp", "user") \
         .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss')) \
         .withColumn("user", lit("trump"))
     tweet_df4.printSchema()
