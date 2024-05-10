@@ -39,8 +39,6 @@ if __name__ == "__main__":
     message = None
     for i, row in data.iterrows():
         message = {}
-        print("Preparing message: " + str(i))
-
         message["tweet"] = row['tweet']
         message["state"] = row['state']
         message["state_code"] = row['state_code']

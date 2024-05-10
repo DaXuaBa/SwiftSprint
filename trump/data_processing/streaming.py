@@ -21,33 +21,6 @@ input_kafka_topic_name = config.get('kafka', 'input_topic_name')
 output_kafka_topic_name = config.get('kafka', 'output_topic_name')
 kafka_bootstrap_servers = kafka_host_name + ':' + kafka_port_no
 
-mysql_host_name = config.get('mysql', 'host')
-mysql_port_no = config.get('mysql', 'port_no')
-mysql_user_name = config.get('mysql', 'username')
-mysql_password = config.get('mysql', 'password')
-mysql_database_name = config.get('mysql', 'db_name')
-mysql_driver = config.get('mysql', 'driver')
-
-mysql_daxu_table_name = config.get('mysql', 'mysql_daxu_tbl')
-
-mysql_jdbc_url = "jdbc:mysql://" + mysql_host_name + ":" + mysql_port_no + "/" + mysql_database_name
-
-db_properties = {}
-db_properties['user'] = mysql_user_name
-db_properties['password'] = mysql_password
-db_properties['driver'] = mysql_driver
-
-def save_to_mysql_table(current_df, epoc_id, mysql_table_name):
-
-    mysql_jdbc_url = "jdbc:mysql://" + mysql_host_name + ":" + str(mysql_port_no) + "/" + mysql_database_name
-
-    current_df = current_df.withColumn('batch_no', lit(epoc_id))
-
-    current_df.write.jdbc(url = mysql_jdbc_url,
-                  table = mysql_table_name,
-                  mode = 'append',
-                  properties = db_properties)
-
 emojis = {':)': 'smile', ':-)': 'smile', ';d': 'wink', ':-E': 'vampire', ':(': 'sad', 
           ':-(': 'sad', ':-<': 'sad', ':P': 'raspberry', ':O': 'surprised',
           ':-@': 'shocked', ':@': 'shocked',':-$': 'confused', ':\\': 'annoyed', 
@@ -157,30 +130,16 @@ if __name__ == "__main__":
         .select(from_json(col("value"), tweet_schema).alias("data")) \
         .select("data.*") \
         .withColumn("sentiment", predict_udf("tweet"))
-
-    tweet_df1 = tweet_df.groupBy("state_code") \
-        .agg(sum("sentiment").alias("total"))
+        
+    tweet_df1 = tweet_df.groupBy("state", "state_code") \
+        .agg(sum("sentiment").alias("sum_sentiment"))
     
     tweet_df2 = tweet_df1 \
+        .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss')) \
         .withColumn("name", lit("trump"))
     tweet_df2.printSchema()
 
-    tweet_df2 \
-        .writeStream \
-        .trigger(processingTime='30 seconds') \
-        .outputMode("update") \
-        .foreachBatch(lambda current_df, epoc_id: save_to_mysql_table(current_df, epoc_id, mysql_daxu_table_name)) \
-        .start()
-        
-    tweet_df3 = tweet_df.groupBy("state", "state_code") \
-        .agg(sum("sentiment").alias("sum_sentiment"))
-    
-    tweet_df4 = tweet_df3 \
-        .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss')) \
-        .withColumn("user", lit("trump"))
-    tweet_df4.printSchema()
-
-    tweet_process_stream = tweet_df4 \
+    tweet_process_stream = tweet_df2 \
         .writeStream \
         .trigger(processingTime='30 seconds') \
         .outputMode("update") \
@@ -188,16 +147,22 @@ if __name__ == "__main__":
         .format("console") \
         .start()
     
-    kafka_writer_query = tweet_df4 \
-        .selectExpr("user as key", "to_json(struct(*)) as value") \
+    def send_to_kafka(df, epoch_id):
+        df_with_batch_no = df.withColumn('batch_no', lit(epoch_id))
+        df_with_batch_no = df_with_batch_no.selectExpr("name as key", "to_json(struct(*)) as value")
+        df_with_batch_no.write \
+            .format("kafka") \
+            .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
+            .option("topic", output_kafka_topic_name) \
+            .save()
+
+    kafka_writer_query = tweet_df2 \
         .writeStream \
         .trigger(processingTime='30 seconds') \
-        .queryName("Kafka Writer") \
-        .format("kafka") \
-        .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
-        .option("topic", output_kafka_topic_name) \
+        .foreachBatch(send_to_kafka) \
         .outputMode("update") \
         .option("checkpointLocation", "kafka-check-point-dir") \
+        .queryName("Kafka Writer") \
         .start()
     
     tweet_process_stream.awaitTermination()
