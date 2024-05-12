@@ -133,7 +133,8 @@ if __name__ == "__main__":
     
     tweet_df1 = tweet_df \
         .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss')) \
-        .withColumn("user", lit("biden"))
+        .withColumn("user", lit("biden")) \
+        .select("state", "state_code", "sentiment", "timestamp", "user")
     tweet_df1.printSchema()
 
     tweet_process_stream = tweet_df1 \
