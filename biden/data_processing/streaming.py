@@ -133,8 +133,8 @@ if __name__ == "__main__":
     
     tweet_df1 = tweet_df \
         .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss')) \
-        .withColumn("user", lit("biden")) \
-        .select("state", "state_code", "sentiment", "timestamp", "user")
+        .withColumn("name", lit("biden")) \
+        .select("state", "state_code", "sentiment", "timestamp", "name")
     tweet_df1.printSchema()
 
     tweet_process_stream = tweet_df1 \
@@ -147,7 +147,7 @@ if __name__ == "__main__":
     
     def send_to_kafka(df, epoch_id):
         df_with_batch_no = df.withColumn('batch_no', lit(epoch_id))
-        df_with_batch_no = df_with_batch_no.selectExpr("user as key", "to_json(struct(*)) as value")
+        df_with_batch_no = df_with_batch_no.selectExpr("name as key", "to_json(struct(*)) as value")
         df_with_batch_no.write \
             .format("kafka") \
             .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
