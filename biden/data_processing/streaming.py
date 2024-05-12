@@ -131,15 +131,12 @@ if __name__ == "__main__":
         .select("data.*") \
         .withColumn("sentiment", predict_udf("tweet"))
     
-    tweet_df1 = tweet_df.groupBy("state", "state_code") \
-        .agg(sum("sentiment").alias("sum_sentiment"))
-    
-    tweet_df2 = tweet_df1 \
+    tweet_df1 = tweet_df \
         .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss')) \
         .withColumn("user", lit("biden"))
-    tweet_df2.printSchema()
+    tweet_df1.printSchema()
 
-    tweet_process_stream = tweet_df2 \
+    tweet_process_stream = tweet_df1 \
         .writeStream \
         .trigger(processingTime='30 seconds') \
         .outputMode("update") \
@@ -156,7 +153,7 @@ if __name__ == "__main__":
             .option("topic", output_kafka_topic_name) \
             .save()
 
-    kafka_writer_query = tweet_df2 \
+    kafka_writer_query = tweet_df1 \
         .writeStream \
         .trigger(processingTime='30 seconds') \
         .foreachBatch(send_to_kafka) \
