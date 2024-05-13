@@ -131,36 +131,32 @@ if __name__ == "__main__":
         .select("data.*") \
         .withColumn("sentiment", predict_udf("tweet"))
         
-    tweet_df1 = tweet_df \
+    tweet_df1 = tweet_df.groupBy("state", "state_code") \
+        .agg(sum("sentiment").alias("sum_sentiment"))
+    
+    tweet_df2 = tweet_df1 \
         .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss')) \
-        .withColumn("name", lit("trump")) \
-        .select("state", "state_code", "sentiment", "timestamp", "name")
-    tweet_df1.printSchema()
+        .withColumn("name", lit("trump"))
+    tweet_df2.printSchema()
 
-    tweet_process_stream = tweet_df1 \
+    tweet_process_stream = tweet_df2 \
         .writeStream \
         .trigger(processingTime='30 seconds') \
         .outputMode("update") \
         .option("truncate", "false") \
         .format("console") \
         .start()
-    
-    def send_to_kafka(df, epoch_id):
-        df_with_batch_no = df.withColumn('batch_no', lit(epoch_id))
-        df_with_batch_no = df_with_batch_no.selectExpr("name as key", "to_json(struct(*)) as value")
-        df_with_batch_no.write \
-            .format("kafka") \
-            .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
-            .option("topic", output_kafka_topic_name) \
-            .save()
 
-    kafka_writer_query = tweet_df1 \
+    kafka_writer_query = tweet_df2 \
+        .selectExpr("name as key", "to_json(struct(*)) as value") \
         .writeStream \
         .trigger(processingTime='30 seconds') \
-        .foreachBatch(send_to_kafka) \
+        .queryName("Kafka Writer") \
+        .format("kafka") \
+        .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
+        .option("topic", output_kafka_topic_name) \
         .outputMode("update") \
         .option("checkpointLocation", "kafka-check-point-dir") \
-        .queryName("Kafka Writer") \
         .start()
     
     tweet_process_stream.awaitTermination()
