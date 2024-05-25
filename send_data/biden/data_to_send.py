@@ -46,6 +46,6 @@ if __name__ == "__main__":
         if message["state"] in states:
             print("Message: ", message)
             kafka_producer_obj.send(KAFKA_TOPIC_NAME_CONS, message)
-            time.sleep(2)
+            time.sleep(1)
 
     print("Kafka Producer Application Completed. ")

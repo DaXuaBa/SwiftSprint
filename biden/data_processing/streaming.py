@@ -130,16 +130,15 @@ if __name__ == "__main__":
         .select(from_json(col("value"), tweet_schema).alias("data")) \
         .select("data.*") \
         .withColumn("sentiment", predict_udf("tweet"))
-    
-    tweet_df1 = tweet_df.groupBy("state", "state_code") \
-        .agg(sum("sentiment").alias("sum_sentiment"))
-    
-    tweet_df2 = tweet_df1 \
+    tweet_df.printSchema()
+        
+    tweet_df1 = tweet_df \
         .withColumn("timestamp", date_format(current_timestamp(), 'yyyy-MM-dd HH:mm:ss')) \
-        .withColumn("name", lit("biden"))
-    tweet_df2.printSchema()
+        .withColumn("name", lit("biden")) \
+        .select("state", "state_code", "sentiment", "timestamp", "name")
+    tweet_df1.printSchema()
 
-    tweet_process_stream = tweet_df2 \
+    tweet_process_stream = tweet_df1 \
         .writeStream \
         .trigger(processingTime='30 seconds') \
         .outputMode("update") \
@@ -147,7 +146,7 @@ if __name__ == "__main__":
         .format("console") \
         .start()
 
-    kafka_writer_query = tweet_df2 \
+    kafka_writer_query = tweet_df1 \
         .selectExpr("name as key", "to_json(struct(*)) as value") \
         .writeStream \
         .trigger(processingTime='30 seconds') \
