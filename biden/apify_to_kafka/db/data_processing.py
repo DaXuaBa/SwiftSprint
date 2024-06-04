@@ -193,13 +193,12 @@ def call_api(db: Session):
                                 state_to_send = None  
                                 state_code_to_send = None
 
-                            # if state_to_send:
-                            #     send_data_to_kafka({
-                            #         "tweet": tweet,
-                            #         "state": state_to_send,
-                            #         "state_code": state_code_to_send
-                            #     })
-                            print("send_data_to_kafka")
+                            if state_to_send:
+                                send_data_to_kafka({
+                                    "tweet": tweet,
+                                    "state": state_to_send,
+                                    "state_code": state_code_to_send
+                                })
 
                 current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 print(f"Task {record_id} completed at {current_time}")
