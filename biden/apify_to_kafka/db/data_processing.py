@@ -4,17 +4,8 @@ from dateutil import parser
 import json
 import pytz
 import requests
-import pymysql
-
-# Kết nối đến cơ sở dữ liệu MySQL
-connection = pymysql.connect(
-    host="monorail.proxy.rlwy.net",
-    port=40415,
-    user="root",
-    password="jAqSZpiuuqXOfyQFbtyMiKDSFwgvrxHd",
-    database="biden"
-)
-cursor = connection.cursor()
+from sqlalchemy.orm import Session
+from db.models import *
 
 def get_data_from_url():
     try:
@@ -28,32 +19,22 @@ def get_data_from_url():
     except requests.exceptions.RequestException as e:
         print(f"An error occurred in get_data_from_url(): {e}")
         return None
-
-def insert_data_to_database():
+    
+def insert_data_to_database(db: Session):
     try:
         item = get_data_from_url()
-        # Duyệt qua các mục và chèn dữ liệu vào cơ sở dữ liệu
+        
         for x in item['data']['items']:
             defaultDatasetId = x['defaultDatasetId']
-            
-            # Câu lệnh SQL để kiểm tra xem defaultDatasetId đã tồn tại trong bảng DatasetStatus chưa
-            check_sql = "SELECT COUNT(*) FROM DatasetStatus WHERE dataset_id = %s"
-            check_val = (defaultDatasetId,)
-            cursor.execute(check_sql, check_val)
-            result = cursor.fetchone()  # Lấy kết quả từ truy vấn SELECT
 
-            if result[0] == 0:  # Nếu defaultDatasetId không tồn tại trong bảng
-                # Câu lệnh SQL để chèn dữ liệu vào bảng DatasetStatus
-                insert_sql = "INSERT INTO DatasetStatus (dataset_id) VALUES (%s)"
-                insert_val = (defaultDatasetId,)
-
-                # Thực thi câu lệnh SQL
-                cursor.execute(insert_sql, insert_val)
+            exists = db.query(DatasetStatus).filter(DatasetStatus.dataset_id == defaultDatasetId).first()
+            if not exists:
+                new_status = DatasetStatus(dataset_id=defaultDatasetId)
+                db.add(new_status)
+                db.commit()
+                db.refresh(new_status)
             else:
-                # Nếu defaultDatasetId đã tồn tại trong bảng, bỏ qua hoặc ghi log lỗi
                 print("defaultDatasetId already exists in table DatasetStatus")
-        # Xác nhận các thay đổi
-        connection.commit()
     except Exception as e:
         print(f"An error occurred in insert_data_to_database: {e}")
 
@@ -125,18 +106,17 @@ def send_data_to_kafka(data):
     except Exception as e:
         print(f"An error occurred while sending data to Kafka: {str(e)}")
 
-def call_api():
+def call_api(db: Session):
     print("Task in progress")
-    insert_data_to_database()
-    try:  
+    insert_data_to_database(db)
+    try:
         # Lấy các bản ghi từ cơ sở dữ liệu có status = 0
-        sql_select = "SELECT id, dataset_id FROM DatasetStatus WHERE status = 0"
-        cursor.execute(sql_select)
-        records = cursor.fetchall()
+        records = db.query(DatasetStatus).filter(DatasetStatus.status == 0).all()
 
         # Lặp qua từng bản ghi
         for record in records:
-            record_id, dataset_id = record
+            record_id = record.id
+            dataset_id = record.dataset_id
 
             # Gọi API với default_dataset_id là dataset_id
             url = f"https://api.apify.com/v2/datasets/{dataset_id}/items"
@@ -145,16 +125,14 @@ def call_api():
             # Kiểm tra xem request có thành công không
             if response.status_code == 200:
                 # Đổi status của bản ghi từ 0 thành 1
-                sql_update = "UPDATE DatasetStatus SET status = 1 WHERE id = %s"
-                cursor.execute(sql_update, (record_id,))
-                
+                record.status = 1
+                db.commit()
+
                 for x in response.json():
                     tweet_id = x['id']
                     # Kiểm tra xem tweet_id đã tồn tại trong TweetData hay chưa
-                    sql_check = "SELECT COUNT(*) FROM TweetData WHERE tweet_id = %s"
-                    cursor.execute(sql_check, (tweet_id,))
-                    result = cursor.fetchone()
-                    if result[0] == 0:  # Nếu tweet_id chưa tồn tại trong MySQL
+                    exists = db.query(TweetData).filter(TweetData.tweet_id == tweet_id).first()
+                    if not exists:
                         created_at_str = x['createdAt']
                         tweet = x['text']
                         likes = x['likeCount']
@@ -181,15 +159,16 @@ def call_api():
                         created_at = convert_to_vietnam_time(created_at_str)
                         user_join_date = convert_to_vietnam_time(user_join_date_str)
 
-                        # Tạo câu lệnh SQL để chèn dữ liệu vào bảng
-                        sql = "INSERT INTO TweetData (created_at, tweet_id, tweet, likes, retweet_count, user_id, \
-                                user_name, user_screen_name,user_description, user_join_date, user_followers_count, \
-                                user_location, latitude, longitude, state_1, state_2, country) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
-                        val = (created_at, tweet_id, tweet, likes, retweet_count, user_id, user_name, user_screen_name,
-                            user_description, user_join_date, user_followers_count, user_location, latitude, longitude, state_1, state_2, country)
-
-                        # Thực thi câu lệnh SQL
-                        cursor.execute(sql, val)
+                        # Tạo đối tượng TweetData và thêm vào phiên làm việc
+                        new_tweet = TweetData(
+                            created_at=created_at, tweet_id=tweet_id, tweet=tweet, likes=likes, retweet_count=retweet_count,
+                            user_id=user_id, user_name=user_name, user_screen_name=user_screen_name, user_description=user_description,
+                            user_join_date=user_join_date, user_followers_count=user_followers_count, user_location=user_location,
+                            latitude=latitude, longitude=longitude, state_1=state_1, state_2=state_2, country=country
+                        )
+                        db.add(new_tweet)
+                        db.commit()
+                        db.refresh(new_tweet)
 
                         states = {
                             'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA', 'Colorado': 'CO',
@@ -214,13 +193,13 @@ def call_api():
                                 state_to_send = None  
                                 state_code_to_send = None
 
-                            if state_to_send:
-                                send_data_to_kafka({
-                                    "tweet": tweet,
-                                    "state": state_to_send,
-                                    "state_code": state_code_to_send
-                                })
-                connection.commit()
+                            # if state_to_send:
+                            #     send_data_to_kafka({
+                            #         "tweet": tweet,
+                            #         "state": state_to_send,
+                            #         "state_code": state_code_to_send
+                            #     })
+                            print("send_data_to_kafka")
 
                 current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 print(f"Task {record_id} completed at {current_time}")

@@ -1,13 +1,15 @@
-from fastapi import FastAPI, BackgroundTasks
-from pydantic import BaseModel
-from quantum import call_api
+from db import models
+from db.database import engine
+from fastapi import FastAPI
+from router import quantum
 
 app = FastAPI()
 
-class AnyData(BaseModel):
-    pass
+list_router = [
+    quantum.router
+]
 
-@app.post("/receive-json/")
-def receive_json(background_tasks: BackgroundTasks, data: AnyData):
-    background_tasks.add_task(call_api)
-    return {"message": "Task completed"}
+for router in list_router: 
+    app.include_router(router) 
+
+models.Base.metadata.create_all(bind=engine)
